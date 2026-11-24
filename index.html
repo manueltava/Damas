@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Damas</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Damas">
+<meta name="theme-color" content="#2a2320">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='96' fill='%235d3a1a'/%3E%3Crect x='56' y='56' width='400' height='400' rx='16' fill='%23f3dfb8'/%3E%3Crect x='56' y='56' width='200' height='200' fill='%238b5a2b'/%3E%3Crect x='256' y='256' width='200' height='200' fill='%238b5a2b'/%3E%3Ccircle cx='156' cy='356' r='82' fill='%23ffffff' stroke='%232b2118' stroke-width='12'/%3E%3Ccircle cx='356' cy='156' r='82' fill='%231e1e1e' stroke='%232b2118' stroke-width='12'/%3E%3Cpath d='M308 178 L318 132 L344 160 L356 122 L368 160 L394 132 L404 178 Z' fill='%23ffd700'/%3E%3C/svg%3E">
+<style>
+:root{--bg:#2a2320;--ink:#f5efe6;--dark:#5a3b22;--light:#c9a77a;--red:#c62828;--black:#111;--hl:#43a047;--sel:#ffd54f;--btn:#7a5a36;--btnfg:#fff}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,sans-serif;font-size:20px}
+body{padding:env(safe-area-inset-top,0px) 12px env(safe-area-inset-bottom,0px)}
+h1{font-size:1.7em;text-align:center;margin:14px 0 4px}
+h2{font-size:1.3em;margin:0 0 10px}
+#placar{text-align:center;font-size:1.2em;font-weight:bold;margin:6px 0}
+#msg{text-align:center;font-size:1.3em;font-weight:bold;margin:8px 0 14px;min-height:1.5em}
+#tab{width:min(96vw,80vh,640px);aspect-ratio:1;display:grid;grid-template-columns:repeat(8,minmax(0,1fr));grid-template-rows:repeat(8,minmax(0,1fr));margin:0 auto;border:4px solid var(--dark);border-radius:6px;overflow:hidden}
+.c{position:relative;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.c.d{background:var(--dark)}
+.c.l{background:var(--light)}
+.p{width:84%;height:84%;border-radius:50%;border:5px solid #111;box-shadow:0 4px 8px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;font-size:1.2em;line-height:1;overflow:hidden;color:#ffd700;font-weight:bold}
+.p.r{background:#f4ead5;color:#8a6100;border-color:#111}
+.p.b{background:#111;color:#ffd700;border-color:#f5efe6}
+.sel .p{outline:5px solid var(--sel);outline-offset:2px}
+.dot{position:absolute;left:50%;top:50%;width:32%;height:32%;transform:translate(-50%,-50%);border-radius:50%;background:var(--hl);opacity:.9}
+.row{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:14px 0}
+button{font-size:1.1em;padding:12px 16px;border:none;border-radius:12px;background:var(--btn);color:var(--btnfg);cursor:pointer;min-height:52px}
+button.on{outline:3px solid var(--sel)}
+section{max-width:640px;margin:22px auto;padding:16px;border-radius:12px;background:rgba(0,0,0,.06)}
+#lista{max-height:220px;overflow:auto;padding:0;margin:10px 0;list-style:none}
+#lista li{padding:12px;border-radius:8px;cursor:pointer;margin-bottom:4px;background:rgba(0,0,0,.04)}
+#lista li.at{background:var(--sel);color:#222;font-weight:bold}
+#np{text-align:center;font-size:1.1em;margin:8px 0;min-height:1.4em}
+input[type=file]{font-size:1em;width:100%}
+</style>
+</head>
+<body>
+<h1>Damas</h1>
+<div id="placar"></div>
+<div id="msg"></div>
+<div id="tab"></div>
+<div class="row">
+  <button id="novo">Novo jogo</button>
+</div>
+
+
+<script>
+const N=8, DIAG=[[-1,-1],[-1,1],[1,-1],[1,1]];
+const inb=(r,c)=>r>=0&&r<N&&c>=0&&c<N;
+const ix=(r,c)=>r*N+c;
+let board,turn,sel,moves,over;
+let vitorias={r:0,b:0};
+
+function novo(){
+  board=Array(64).fill(null);
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+    if((r+c)%2===1){
+      if(r<3)board[ix(r,c)]={c:'b',k:false};
+      else if(r>4)board[ix(r,c)]={c:'r',k:false};
+    }
+  }
+  turn='r';sel=null;moves=[];over=false;render();
+}
+
+// Gera jogadas de uma peça. Comer é obrigatório (filtrado em allMoves).
+function pieceMoves(b,from){
+  const p=b[from], sim=b.slice(); sim[from]=null;
+  const r0=Math.floor(from/N), c0=from%N;
+  const fwd=p.c==='r'?-1:1, promoRow=p.c==='r'?0:N-1, enemy=p.c==='r'?'b':'r';
+  const dirsFor=p.k?DIAG:DIAG.filter(d=>d[0]===fwd);
+  const caps=[], simple=[];
+
+  const rec=(r,c,captured,path)=>{
+    let any=false;
+    for(const [dr,dc] of dirsFor){
+      let rr=r+dr,cc=c+dc;
+      while(p.k&&inb(rr,cc)&&sim[ix(rr,cc)]===null){rr+=dr;cc+=dc;}
+      if(!inb(rr,cc))continue;
+      const i=ix(rr,cc), q=sim[i];
+      if(!q||q.c!==enemy||captured.includes(i))continue;
+      let lr=rr+dr,lc=cc+dc;
+      if(!inb(lr,lc)||sim[ix(lr,lc)]!==null)continue;
+      // Dama: pode parar em qualquer casa livre depois da peça comida
+      do{
+        any=true;
+        const nc=[...captured,i], to=ix(lr,lc);
+        if(!p.k&&lr===promoRow)caps.push({from,to,caps:nc,promote:true});
+        else rec(lr,lc,nc,[...path,to]);
+        lr+=dr;lc+=dc;
+      }while(p.k&&inb(lr,lc)&&sim[ix(lr,lc)]===null);
+    }
+    if(!any&&captured.length){
+      const to=path[path.length-1];
+      caps.push({from,to,caps:captured,promote:!p.k&&Math.floor(to/N)===promoRow});
+    }
+  };
+  rec(r0,c0,[],[]);
+
+  for(const [dr,dc] of dirsFor){
+    let rr=r0+dr,cc=c0+dc;
+    while(inb(rr,cc)&&sim[ix(rr,cc)]===null){
+      simple.push({from,to:ix(rr,cc),caps:[],promote:!p.k&&rr===promoRow});
+      if(!p.k)break;
+      rr+=dr;cc+=dc;
+    }
+  }
+  return {caps,simple};
+}
+
+function allMoves(b,col){
+  const caps=[],simple=[];
+  for(let i=0;i<64;i++)if(b[i]&&b[i].c===col){
+    const m=pieceMoves(b,i);
+    caps.push(...m.caps);simple.push(...m.simple);
+  }
+  return caps.length?caps:simple;
+}
+
+let ctxAudio=null;
+function som(tipo){
+  try{
+    if(!ctxAudio)ctxAudio=new (window.AudioContext||window.webkitAudioContext)();
+    if(ctxAudio.state==='suspended')ctxAudio.resume();
+    const sel=tipo==='sel';
+    const dur=sel?0.06:0.14;
+    const buf=ctxAudio.createBuffer(1,Math.floor(ctxAudio.sampleRate*dur),ctxAudio.sampleRate);
+    const d=buf.getChannelData(0);
+    for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,sel?8:5);
+    const src=ctxAudio.createBufferSource();
+    src.buffer=buf;
+    const f=ctxAudio.createBiquadFilter();
+    f.type='bandpass';
+    f.frequency.value=sel?1800:700;
+    f.Q.value=sel?3:2;
+    const g=ctxAudio.createGain();
+    g.gain.value=sel?0.5:0.9;
+    src.connect(f);f.connect(g);g.connect(ctxAudio.destination);
+    src.start();
+  }catch(e){}
+}
+
+function tap(i){
+  if(over)return;
+  const hit=moves.filter(m=>m.to===i);
+  if(sel!==null&&hit.length){doMove(hit[0]);return;}
+  const mine=allMoves(board,turn).filter(m=>m.from===i);
+  if(mine.length){sel=i;moves=mine;som('sel');}
+  else{sel=null;moves=[];}
+  render();
+}
+
+function doMove(m){
+  som('mov');
+  const p=board[m.from];
+  board[m.from]=null;
+  m.caps.forEach(i=>board[i]=null);
+  board[m.to]={c:p.c,k:p.k||m.promote};
+  sel=null;moves=[];
+  turn=turn==='r'?'b':'r';
+  if(allMoves(board,turn).length===0){
+    over=true;
+    const venc=turn==='r'?'b':'r';
+    vitorias[venc]++;
+    document.getElementById('msg').textContent=`Fim do jogo! Ganharam as ${venc==='r'?'brancas':'pretas'}.`;
+  }
+  render();
+}
+
+function render(){
+  document.getElementById('placar').textContent=`Brancas ${vitorias.r}  |  Pretas ${vitorias.b}`;
+  const g=document.getElementById('tab');
+  g.innerHTML='';
+  const dests=moves.map(m=>m.to);
+  for(let i=0;i<64;i++){
+    const r=Math.floor(i/N), c=i%N;
+    const d=document.createElement('div');
+    d.className='c '+((r+c)%2?'d':'l');
+    if(sel===i)d.classList.add('sel');
+    const p=board[i];
+    if(p){
+      const e=document.createElement('div');
+      e.className='p '+p.c;
+      e.textContent=p.k?'♛':'';
+      d.appendChild(e);
+    }
+    if(dests.includes(i)){
+      const e=document.createElement('div');
+      e.className='dot';
+      d.appendChild(e);
+    }
+    d.onclick=()=>tap(i);
+    g.appendChild(d);
+  }
+  if(!over){
+    const cap=allMoves(board,turn).some(m=>m.caps.length);
+    document.getElementById('msg').textContent=
+      `Vez das ${turn==='r'?'brancas':'pretas'}`+(cap?': tem de comer!':'');
+  }
+}
+
+document.getElementById('novo').onclick=novo;
+novo();
+</script>
+<script>
+if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js');}
+</script>
+</body>
+</html>
